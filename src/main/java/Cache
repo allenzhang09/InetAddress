@@ -1,0 +1,85 @@
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class Cache<K, V> {
+    private Map<K, CacheEntry<V>> cache;
+    private int maxSize;
+    private long expirationTimeInMillis;
+
+    public Cache(int maxSize, long expirationTimeInMillis) {
+        this.maxSize = maxSize;
+        this.expirationTimeInMillis = expirationTimeInMillis;
+        cache = new ConcurrentHashMap<>();
+    }
+
+    public void put(K key, V value) {
+        evictExpiredEntries();
+        if (cache.size() >= maxSize) {
+            evict();
+        }
+        cache.put(key, new CacheEntry<>(value));
+    }
+
+    public V get(K key) {
+        CacheEntry<V> entry = cache.get(key);
+        if (entry != null && !entry.isExpired()) {
+            entry.setAccessTimestamp(System.currentTimeMillis());
+            return entry.getValue();
+        } else {
+            cache.remove(key);
+            return null;
+        }
+    }
+
+    public void remove(K key) {
+        cache.remove(key);
+    }
+
+    public void clear() {
+        cache.clear();
+    }
+
+    public int size() {
+        return cache.size();
+    }
+
+    private void evict() {
+        K keyToRemove = cache.keySet().iterator().next(); // Get the first (oldest) key
+        cache.remove(keyToRemove);
+    }
+
+    private void evictExpiredEntries() {
+        long currentTimestamp = System.currentTimeMillis();
+        cache.entrySet().removeIf(entry -> entry.getValue().isExpired(currentTimestamp));
+    }
+
+    private static class CacheEntry<V> {
+        private V value;
+        private long accessTimestamp;
+
+        public CacheEntry(V value) {
+            this.value = value;
+            this.accessTimestamp = System.currentTimeMillis();
+        }
+
+        public V getValue() {
+            return value;
+        }
+
+        public long getAccessTimestamp() {
+            return accessTimestamp;
+        }
+
+        public void setAccessTimestamp(long accessTimestamp) {
+            this.accessTimestamp = accessTimestamp;
+        }
+
+        public boolean isExpired() {
+            return isExpired(System.currentTimeMillis());
+        }
+
+        public boolean isExpired(long currentTimestamp) {
+            return (currentTimestamp - accessTimestamp) >= expirationTimeInMillis;
+        }
+    }
+}
